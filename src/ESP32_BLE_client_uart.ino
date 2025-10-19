@@ -67,11 +67,12 @@ static BLEUUID charUUID_RX("6E400002-B5A3-F393-E0A9-E50E24DCCA9E");   // RX Char
 // the server can send data to the client as notifications.
 static BLEUUID charUUID_TX("6E400003-B5A3-F393-E0A9-E50E24DCCA9E");   // TX Characteristic
 
-static BLEAddress *pServerAddress;
 static boolean doConnect = false;
 static boolean connected = false;
 static BLERemoteCharacteristic* pTXCharacteristic;
 static BLERemoteCharacteristic* pRXCharacteristic;
+static BLEAdvertisedDevice *myDevice;
+
 
 static void notifyCallback(
   BLERemoteCharacteristic* pBLERemoteCharacteristic,
@@ -87,15 +88,15 @@ static void notifyCallback(
   Serial.println();
 }
 
-bool connectToServer(BLEAddress pAddress) {
+bool connectToServer() {
   Serial.print("Establishing a connection to device address: ");
-  Serial.println(pAddress.toString().c_str());
+  Serial.println(myDevice->getAddress().toString().c_str());
 
   BLEClient*  pClient  = BLEDevice::createClient();
   Serial.println(" - Created client");
 
   // Connect to the remove BLE Server.
-  pClient->connect(pAddress);
+  pClient->connect(myDevice);
   Serial.println(" - Connected to server");
 
   // Obtain a reference to the Nordic UART service on the remote BLE server.
@@ -136,6 +137,9 @@ bool connectToServer(BLEAddress pAddress) {
   // Write to the the RX characteristic.
   String helloValue = "Hello Remote Server";
   pRXCharacteristic->writeValue(helloValue.c_str(), helloValue.length());
+
+  //Mandatory to avoid crash on check of function return
+  return true;
 }
 
 
@@ -154,9 +158,13 @@ class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
       if (advertisedDevice.haveServiceUUID() && advertisedDevice.getServiceUUID().equals(serviceUUID)) {
 
         Serial.println("Found a device with the desired ServiceUUID!");
+
+        // Is this really needed ? https://github.com/espressif/arduino-esp32/blob/master/libraries/BLE/examples/Client/Client.ino says
+        // BLEDevice::getScan()->stop();
         advertisedDevice.getScan()->stop();
 
-        pServerAddress = new BLEAddress(advertisedDevice.getAddress());
+        myDevice = new BLEAdvertisedDevice(advertisedDevice);
+
         doConnect = true;
 
       } // Found our server
@@ -190,7 +198,7 @@ void loop() {
   // BLE Server with which we wish to connect.  Now we connect to it.  Once we are
   // connected we set the connected flag to be true.
   if (doConnect == true) {
-    if (connectToServer(*pServerAddress)) {
+    if (connectToServer()) {
       Serial.println("We are now connected to the BLE Server.");
       connected = true;
     } else {
